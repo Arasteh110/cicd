@@ -13,7 +13,7 @@
                 <div class="row no-gutters align-items-center">
                     <div class="col me-2">
                         <div class="dashboard-stat-label">
-                            دپارتمان‌ها
+                            department
                         </div>
                         <div class="dashboard-stat-value">{{ $stats['total_departments'] }}</div>
                     </div>
