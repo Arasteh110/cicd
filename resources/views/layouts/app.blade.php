@@ -563,7 +563,7 @@
                         <li class="nav-item">
                             <a class="nav-link {{ request()->routeIs('dashboard') ? 'active' : '' }}" href="{{ route('dashboard') }}">
                                 <i class="fas fa-tachometer-alt me-2"></i>
-                                داشبورد
+                                dashboard
                             </a>
                         </li>
 
@@ -571,7 +571,7 @@
                         <li class="nav-item">
                             <a class="nav-link {{ request()->routeIs('departments.*') ? 'active' : '' }}" href="{{ route('departments.index') }}">
                                 <i class="fas fa-building me-2"></i>
-                                دپارتمان‌ها
+                                departments
                             </a>
                         </li>
                         @endif
@@ -580,7 +580,7 @@
                         <li class="nav-item">
                             <a class="nav-link {{ request()->routeIs('workflows.*') ? 'active' : '' }}" href="{{ route('workflows.index') }}">
                                 <i class="fas fa-project-diagram me-2"></i>
-                                گردش کارها
+                               gardesh kar
                             </a>
                         </li>
                         @endif
@@ -589,7 +589,7 @@
                         <li class="nav-item">
                             <a class="nav-link {{ request()->routeIs('tasks.*') ? 'active' : '' }}" href="{{ route('tasks.index') }}">
                                 <i class="fas fa-tasks me-2"></i>
-                                تسک‌ها
+                                tasks
                             </a>
                         </li>
                         @endif
