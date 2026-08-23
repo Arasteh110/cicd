@@ -1,58 +1,50 @@
-stages:
-  - deploy
-
-deploy_production:
+rollback:
   stage: deploy
   image: alpine:latest
 
   before_script:
-    - apk add --no-cache openssh-client rsync
+    - apk add --no-cache openssh-client
+
     - mkdir -p ~/.ssh
     - chmod 700 ~/.ssh
+
     - echo "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_ed25519
     - chmod 600 ~/.ssh/id_ed25519
+
     - ssh-keyscan -H -p "$SSH_PORT" "$SSH_HOST" >> ~/.ssh/known_hosts
 
   script:
-    - echo "=== Starting deployment ==="
-
     - |
-      rsync -az \
-        --exclude=".git/" \
-        --exclude=".env" \
-        --exclude="vendor/" \
-        --exclude="storage/" \
-        -e "ssh -p $SSH_PORT" \
-        ./ "$SSH_USER@$SSH_HOST:/home/testcicd/domains/cicdtest.salamsch.org/laravel-app/"
+      set -e
 
-    - echo "=== Running Laravel commands ==="
+      DEPLOY_PATH="/home/testcicd/domains/cicdtest.salamsch.org"
 
-    - |
-      ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" << 'EOF'
+      ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "
         set -e
 
-        cd /home/testcicd/domains/cicdtest.salamsch.org/laravel-app
+        cd '$DEPLOY_PATH'
 
-        echo "Current directory:"
-        pwd
+        CURRENT=\$(readlink current | sed 's#releases/##')
 
-        echo "Installing Composer dependencies..."
-        composer install --no-dev --optimize-autoloader
+        echo 'Current release:'
+        echo \"\$CURRENT\"
 
-        echo "Clearing Laravel cache..."
-        php artisan optimize:clear
+        PREVIOUS=\$(ls -1dt releases/* | grep -v \"\$CURRENT\" | head -1 | xargs -n1 basename)
 
-        echo "Caching configuration..."
-        php artisan config:cache
+        echo 'Rollback target:'
+        echo \"\$PREVIOUS\"
 
-        echo "Caching routes..."
-        php artisan route:cache
+        test -d \"releases/\$PREVIOUS\"
 
-        echo "Caching views..."
-        php artisan view:cache
+        ln -sfn \"releases/\$PREVIOUS\" current
 
-        echo "=== DEPLOY SUCCESS ==="
-      EOF
+        echo 'Rollback completed.'
+
+        echo 'Current release after rollback:'
+        readlink current
+      "
+
+  when: manual
 
   only:
     - main
