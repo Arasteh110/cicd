@@ -1,9 +1,6 @@
 stages:
   - deploy
 
-variables:
-  DEPLOY_PATH: "/home/testcicd/domains/cicdtest.salamsch.org"
-
 deploy:
   stage: deploy
   image: alpine:latest
@@ -17,21 +14,23 @@ deploy:
     - ssh-keyscan -H -p "$SSH_PORT" "$SSH_HOST" >> ~/.ssh/known_hosts
 
   script:
-
-    - echo "=== Creating release ==="
-
-    - export RELEASE_ID="$(date +%Y%m%d_%H%M%S)"
-    - export RELEASE_PATH="$DEPLOY_PATH/releases/$RELEASE_ID"
-
-    - echo "Release: $RELEASE_ID"
-
     - |
+      set -e
+
+      DEPLOY_PATH="/home/testcicd/domains/cicdtest.salamsch.org"
+      RELEASE_ID="$(date +%Y%m%d_%H%M%S)"
+      RELEASE_PATH="$DEPLOY_PATH/releases/$RELEASE_ID"
+
+      echo "================================="
+      echo "Deploying release: $RELEASE_ID"
+      echo "================================="
+
+      echo "Creating release directory..."
       ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" \
         "mkdir -p '$RELEASE_PATH'"
 
-    - echo "=== Uploading application ==="
+      echo "Uploading application..."
 
-    - |
       rsync -az \
         --exclude=".git/" \
         --exclude=".env" \
@@ -40,85 +39,58 @@ deploy:
         -e "ssh -p $SSH_PORT" \
         ./ "$SSH_USER@$SSH_HOST:$RELEASE_PATH/"
 
-    - echo "=== Linking shared files ==="
+      echo "Linking shared files..."
 
-    - |
-      ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" << EOF
+      ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "
         set -e
-
-        cd "$RELEASE_PATH"
-
+        cd '$RELEASE_PATH'
         ln -s ../../shared/.env .env
         ln -s ../../shared/storage storage
+      "
 
-        echo "Shared files linked."
-      EOF
+      echo "Installing Composer dependencies..."
 
-    - echo "=== Installing dependencies ==="
-
-    - |
-      ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" << EOF
+      ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "
         set -e
+        cd '$RELEASE_PATH'
+        composer install --no-dev --optimize-autoloader --no-interaction
+      "
 
-        cd "$RELEASE_PATH"
+      echo "Clearing Laravel cache..."
 
-        composer install \
-          --no-dev \
-          --optimize-autoloader \
-          --no-interaction
-
-        echo "Composer completed."
-      EOF
-
-    - echo "=== Laravel cache ==="
-
-    - |
-      ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" << EOF
+      ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "
         set -e
-
-        cd "$RELEASE_PATH"
-
+        cd '$RELEASE_PATH'
         php artisan optimize:clear
-
         php artisan config:cache
         php artisan route:cache
         php artisan view:cache
+      "
 
-        echo "Laravel cache completed."
-      EOF
+      echo "Testing release..."
 
-    - echo "=== Testing release ==="
-
-    - |
-      ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" << EOF
+      ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "
         set -e
-
-        cd "$RELEASE_PATH"
-
-        php artisan about
-
+        cd '$RELEASE_PATH'
         test -f artisan
         test -f vendor/autoload.php
         test -f .env
+        php artisan about
+      "
 
-        echo "Release tests passed."
-      EOF
+      echo "Activating release..."
 
-    - echo "=== Activating release ==="
-
-    - |
-      ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" << EOF
+      ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "
         set -e
-
-        cd "$DEPLOY_PATH"
-
-        ln -sfn "releases/$RELEASE_ID" current
-
-        echo "Current release:"
+        cd '$DEPLOY_PATH'
+        ln -sfn 'releases/$RELEASE_ID' current
+        echo 'Current release:'
         readlink current
+      "
 
-        echo "=== DEPLOY SUCCESS ==="
-      EOF
+      echo "================================="
+      echo "DEPLOY SUCCESS"
+      echo "================================="
 
   only:
     - main
