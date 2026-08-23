@@ -1,16 +1,112 @@
+stages:
+  - deploy
+
+deploy:
+  stage: deploy
+  image: alpine:latest
+
+  before_script:
+    - apk add --no-cache openssh-client rsync
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_ed25519
+    - chmod 600 ~/.ssh/id_ed25519
+    - ssh-keyscan -H -p "$SSH_PORT" "$SSH_HOST" >> ~/.ssh/known_hosts
+
+  script:
+    - |
+      set -e
+
+      DEPLOY_PATH="/home/testcicd/domains/cicdtest.salamsch.org"
+      RELEASE_ID="$(date +%Y%m%d_%H%M%S)"
+      RELEASE_PATH="$DEPLOY_PATH/releases/$RELEASE_ID"
+
+      echo "================================="
+      echo "Deploying release: $RELEASE_ID"
+      echo "================================="
+
+      echo "Creating release directory..."
+
+      ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" \
+        "mkdir -p '$RELEASE_PATH'"
+
+      echo "Uploading application..."
+
+      rsync -az \
+        --exclude=".git/" \
+        --exclude=".env" \
+        --exclude="storage/" \
+        --exclude="vendor/" \
+        -e "ssh -p $SSH_PORT" \
+        ./ "$SSH_USER@$SSH_HOST:$RELEASE_PATH/"
+
+      echo "Linking shared files..."
+
+      ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "
+        set -e
+        cd '$RELEASE_PATH'
+        ln -s ../../shared/.env .env
+        ln -s ../../shared/storage storage
+      "
+
+      echo "Installing Composer dependencies..."
+
+      ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "
+        set -e
+        cd '$RELEASE_PATH'
+        composer install --no-dev --optimize-autoloader --no-interaction
+      "
+
+      echo "Clearing Laravel cache..."
+
+      ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "
+        set -e
+        cd '$RELEASE_PATH'
+        php artisan optimize:clear
+        php artisan config:cache
+        php artisan route:cache
+        php artisan view:cache
+      "
+
+      echo "Testing release..."
+
+      ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "
+        set -e
+        cd '$RELEASE_PATH'
+        test -f artisan
+        test -f vendor/autoload.php
+        test -f .env
+        php artisan about
+      "
+
+      echo "Activating release..."
+
+      ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "
+        set -e
+        cd '$DEPLOY_PATH'
+        ln -sfn 'releases/$RELEASE_ID' current
+        echo 'Current release:'
+        readlink current
+      "
+
+      echo "================================="
+      echo "DEPLOY SUCCESS"
+      echo "================================="
+
+  only:
+    - main
+
+
 rollback:
   stage: deploy
   image: alpine:latest
 
   before_script:
     - apk add --no-cache openssh-client
-
     - mkdir -p ~/.ssh
     - chmod 700 ~/.ssh
-
     - echo "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_ed25519
     - chmod 600 ~/.ssh/id_ed25519
-
     - ssh-keyscan -H -p "$SSH_PORT" "$SSH_HOST" >> ~/.ssh/known_hosts
 
   script:
