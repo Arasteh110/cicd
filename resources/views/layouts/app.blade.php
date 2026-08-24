@@ -563,14 +563,14 @@
                         <li class="nav-item">
                             <a class="nav-link {{ request()->routeIs('dashboard') ? 'active' : '' }}" href="{{ route('dashboard') }}">
                                 <i class="fas fa-tachometer-alt me-2"></i>
-                                fateme
+                                TEST
                             </a>
                         </li>
 
                         @if(auth()->user()->canManageDepartments())
                         <li class="nav-item">
                             <a class="nav-link {{ request()->routeIs('departments.*') ? 'active' : '' }}" href="{{ route('departments.index') }}">
-                                <i class="fas fa-building me-2"></i>
+                                <i class="fas fa-building me-2"></i`>
                                 departments
                             </a>
                         </li>
