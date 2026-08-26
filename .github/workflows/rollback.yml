@@ -2,6 +2,11 @@ name: Rollback Laravel
 
 on:
   workflow_dispatch:
+    inputs:
+      release:
+        description: "Release to rollback to"
+        required: true
+        type: string
 
 jobs:
   rollback:
@@ -24,26 +29,30 @@ jobs:
           set -e
 
           DEPLOY_PATH="/home/testcicd/domains/cicdtest.salamsch.org"
+          RELEASE="${{ inputs.release }}"
+
+          echo "Rollback target: $RELEASE"
 
           ssh -p "${{ secrets.SSH_PORT }}" \
             "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" "
-              
+            
               set -e
+
               cd ${DEPLOY_PATH}
 
-              CURRENT=\$(readlink current | sed 's#releases/##')
+              echo 'Available releases:'
+              ls -1dt releases/*
+
+              echo 'Checking target release...'
+
+              test -d releases/${RELEASE}
+
+              echo 'Target release exists.'
 
               echo 'Current release:'
-              echo \"\$CURRENT\"
+              readlink current
 
-              PREVIOUS=\$(ls -1dt releases/* | grep -v \"\$CURRENT\" | head -1 | xargs -n1 basename)
-
-              echo 'Rollback target:'
-              echo \"\$PREVIOUS\"
-
-              test -d \"releases/\$PREVIOUS\"
-
-              ln -sfn \"releases/\$PREVIOUS\" current
+              ln -sfn releases/${RELEASE} current
 
               echo 'Rollback completed.'
 
