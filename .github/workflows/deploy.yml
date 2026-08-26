@@ -13,6 +13,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rsync
+
       - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
@@ -24,8 +29,64 @@ jobs:
           ssh-keyscan -H -p "${{ secrets.SSH_PORT }}" \
             "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
 
-      - name: Test SSH connection
+      - name: Deploy
         run: |
+          set -e
+
+          DEPLOY_PATH="/home/testcicd/domains/cicdtest.salamsch.org"
+          RELEASE="$(date +%Y%m%d_%H%M%S)"
+
+          echo "Creating release: $RELEASE"
+
           ssh -p "${{ secrets.SSH_PORT }}" \
             "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
-            "echo SSH_CONNECTION_OK"
+            "mkdir -p ${DEPLOY_PATH}/releases/${RELEASE}"
+
+          echo "Uploading project..."
+
+          rsync -az --delete \
+            --exclude=".git" \
+            --exclude=".env" \
+            --exclude="storage" \
+            -e "ssh -p ${{ secrets.SSH_PORT }}" \
+            ./ \
+            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${DEPLOY_PATH}/releases/${RELEASE}/"
+
+          echo "Linking shared files..."
+
+          ssh -p "${{ secrets.SSH_PORT }}" \
+            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" "
+              set -e
+
+              cd ${DEPLOY_PATH}
+
+              rm -f releases/${RELEASE}/.env
+              rm -rf releases/${RELEASE}/storage
+
+              ln -s ../../shared/.env releases/${RELEASE}/.env
+              ln -s ../../shared/storage releases/${RELEASE}/storage
+
+              echo 'Installing Composer dependencies...'
+
+              cd releases/${RELEASE}
+
+              composer install \
+                --no-dev \
+                --optimize-autoloader \
+                --no-interaction
+
+              echo 'Clearing Laravel cache...'
+
+              php artisan optimize:clear
+
+              echo 'Activating release...'
+
+              cd ${DEPLOY_PATH}
+
+              ln -sfn releases/${RELEASE} current
+
+              echo 'Current release:'
+              readlink current
+
+              echo 'Deployment completed successfully.'
+            "
