@@ -35,7 +35,6 @@ jobs:
 
           ssh -p "${{ secrets.SSH_PORT }}" \
             "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" "
-            
               set -e
 
               cd ${DEPLOY_PATH}
