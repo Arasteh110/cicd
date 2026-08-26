@@ -1,0 +1,52 @@
+name: Rollback Laravel
+
+on:
+  workflow_dispatch:
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" | tr -d '\r' > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+          ssh-keyscan -H -p "${{ secrets.SSH_PORT }}" \
+            "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Rollback
+        run: |
+          set -e
+
+          DEPLOY_PATH="/home/testcicd/domains/cicdtest.salamsch.org"
+
+          ssh -p "${{ secrets.SSH_PORT }}" \
+            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" "
+              
+              set -e
+              cd ${DEPLOY_PATH}
+
+              CURRENT=\$(readlink current | sed 's#releases/##')
+
+              echo 'Current release:'
+              echo \"\$CURRENT\"
+
+              PREVIOUS=\$(ls -1dt releases/* | grep -v \"\$CURRENT\" | head -1 | xargs -n1 basename)
+
+              echo 'Rollback target:'
+              echo \"\$PREVIOUS\"
+
+              test -d \"releases/\$PREVIOUS\"
+
+              ln -sfn \"releases/\$PREVIOUS\" current
+
+              echo 'Rollback completed.'
+
+              echo 'Current release after rollback:'
+              readlink current
+            "
